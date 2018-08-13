@@ -1,4 +1,5 @@
 require 'csv'
+require 'date'
 
 buses = {
   "京急バス" => "京浜急行バス",
@@ -24,15 +25,22 @@ end
 def get_last_no
   csvlist = Dir.glob("*.csv")
   pasmologs = csvlist.select {|item|
-    /^PASMO [0-9]{8}-[0-9]{8}\.csv$/.match item
+    /^PASMO [0-9]{8}-[0-9]{8}\.csv$/.match(item) ||
+    /^PASMO [0-9]{8}-[0-9]{8} L[0-9]+\.csv$/.match(item)
   }
   lastlog = pasmologs.sort {|a, b|
     regex = /PASMO [0-9]{8}-([0-9]{8})/
     regex.match(b).captures[0].to_i <=> regex.match(a).captures[0].to_i
   }[0]
-  return CSV.read(lastlog, encoding: Encoding::SJIS).collect { |row|
-    row[0].to_i
-  }.sort {|a, b| b <=> a }.first
+  if /^PASMO [0-9]{8}-[0-9]{8}\.csv$/.match lastlog then
+    return CSV.read(lastlog, encoding: Encoding::SJIS).collect { |row|
+      row[0].to_i
+    }.sort {|a, b| b <=> a }.first
+  else
+    regex = /PASMO [0-9]{8}-[0-9]{8} L([0-9]+)/
+    last_no = regex.match(lastlog).captures[0].to_i
+    return last_no
+  end
 end
 
 if ARGV.size == 1 then
@@ -40,32 +48,33 @@ if ARGV.size == 1 then
   csv_data = CSV.read(ARGV[0], encoding: "UTF-8", headers: true)
   b_date = nil
   e_date = nil
+  max_no = 0
   out_csv = CSV.generate(encoding: Encoding::SJIS) do |csv|
     csv << [
-      "No",
-      "日付",
-      "カテゴリ", "カテゴリ内訳",
-      "メモ", "お店",
+      "日付", "方法",
+      "カテゴリ", "カテゴリの内訳",
       "支払元", "入金先",
-      "支出金額", "収入金額", "振替金額",
-      "振替かどうか",
-      "残高", "処理"
+      "品名", "メモ", "お店",
+      "通貨", "収入", "支出", "振替",
+      "残高調整", "通貨変換前の金額", "集計の設定",
     ]
     csv_data.each do |data|
+      number = data["No"].to_i
       shop = ""
       memo = ""
       category = "その他"
       details = "未分類"
       from = "PASMO"
-      to = ""
+      to = "-"
       payment = ""
       income = ""
       transfer = ""
-      type = ""
+      type = "payment"
       val = data["処理金額"]
       if val == "0" then
         next
       end
+      date = DateTime.strptime(data["日付"], "%Y年%m月%d日")
       if data["詳細"].start_with?("入：") then
         # 電車
         category = "交通"
@@ -80,7 +89,7 @@ if ARGV.size == 1 then
         details = ""
         from = "お財布"
         to = "PASMO"
-        type = "振替"
+        type = "transfer"
         transfer = val
       elsif buses.has_key?(data["詳細"]) then
         # バス
@@ -95,18 +104,15 @@ if ARGV.size == 1 then
         STDERR.puts "Uncategorized: " + data.to_s
       end
       row = [
-        data["No"],
-        data["日付"],
-        category,
-        details,
-        memo, shop,
+        date.strftime("%Y-%m-%d"), type,
+        category, details,
         from, to,
-        payment, income, transfer,
-        type,
-        data["残高"], data["処理"]
+        "", memo, shop,
+        "", income, payment, transfer,
+        "", "", "",
       ]
-      if (data["No"].to_i > last_no) then
-        date = DateTime.strptime(data["日付"], "%Y年%m月%d日")
+      if (number > last_no) then
+        max_no = [max_no, number].max
         if (b_date.nil? or b_date > date) then
           b_date = date
         end
@@ -115,10 +121,14 @@ if ARGV.size == 1 then
         end
         csv << row
       end
+    end
   end
-  end
-  File.open("temp PASMO %s-%s.csv" % [b_date.strftime("%Y%m%d"), e_date.strftime("%Y%m%d")], 'w') do |file|
-    file.write(out_csv)
+  if max_no > 0 then
+    File.open("temp PASMO %s-%s L%d.csv" % [b_date.strftime("%Y%m%d"), e_date.strftime("%Y%m%d"), max_no], 'w') do |file|
+      file.write(out_csv)
+    end
+  elsif
+    STDERR.puts "There are no data"
   end
 else
   STDERR.puts "Usage: convert.rb [<CSV filename>]"
