@@ -4,6 +4,7 @@ require 'date'
 buses = {
   "京急バス" => "京浜急行バス",
   "伊豆箱根バス" => "伊豆箱根バス",
+  "東急バス" => "東急バス",
 }
 
 def conv_content(text)
