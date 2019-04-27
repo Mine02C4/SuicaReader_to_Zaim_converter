@@ -14,7 +14,7 @@ def conv_content(text)
   out_match_station = in_and_out[1].match(/ (\S*)（/)[1]
   out_match_shop = in_and_out[1].match(/ (\S*)）/)[1]
   shop = in_match_shop + " " + out_match_shop
-  if in_match_shop == out_match_shop then
+  if in_match_shop == out_match_shop
     shop = in_match_shop
   end
   return [
@@ -76,7 +76,7 @@ if ARGV.size == 1 then
         next
       end
       date = DateTime.strptime(data["日付"], "%Y年%m月%d日")
-      if data["詳細"].start_with?("入：") then
+      if data["詳細"].start_with?("入:")
         # 電車
         category = "交通"
         details = "電車"
@@ -84,7 +84,7 @@ if ARGV.size == 1 then
         shop = converted_content[0]
         memo = converted_content[1]
         payment = val
-      elsif data["処理"].include?("チャージ") then
+      elsif data["処理"].include?("チャージ")
         # チャージ
         category = ""
         details = ""
